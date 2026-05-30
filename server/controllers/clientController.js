@@ -3,9 +3,10 @@ const pool = require('../db')
 // ─── CREATE CLIENT (admin only) ───────────────────────────────────────────────
 const createClient = async (req, res) => {
   try {
-    const {
+    let {
       first_name,
       last_name,
+      name,
       address,
       latitude,
       longitude,
@@ -13,6 +14,13 @@ const createClient = async (req, res) => {
       emergency_contact,
       emergency_phone
     } = req.body
+
+    // Support a single `name` field from the frontend; split into first/last
+    if (name && (!first_name || !last_name)) {
+      const parts = name.trim().split(/\s+/)
+      first_name = parts.shift()
+      last_name = parts.join(' ') || ''
+    }
 
     // 1. Validate required fields
     if (!first_name || !last_name || !address || !latitude || !longitude) {
@@ -57,9 +65,11 @@ const createClient = async (req, res) => {
       [req.user.userId, 'CLIENT_CREATED', 'clients', newClient.client_id]
     )
 
+    // Add convenience fields for frontend
+    const clientForFrontend = { ...newClient, id: newClient.client_id, name: `${newClient.first_name} ${newClient.last_name}` }
     res.status(201).json({
       message: 'Client created successfully',
-      client: newClient
+      client: clientForFrontend
     })
 
   } catch (error) {
@@ -74,13 +84,14 @@ const getAllClients = async (req, res) => {
     // Optional: filter by active only using query param
     // Example: GET /clients?active=true
     const { active } = req.query
+    const activeFilter = active ?? 'true'
 
     let query = 'SELECT * FROM clients'
     let params = []
 
-    if (active === 'true') {
+    if (activeFilter === 'true') {
       query += ' WHERE is_active = true'
-    } else if (active === 'false') {
+    } else if (activeFilter === 'false') {
       query += ' WHERE is_active = false'
     }
 
@@ -88,10 +99,12 @@ const getAllClients = async (req, res) => {
 
     const result = await pool.query(query, params)
 
+    // map to frontend-friendly shape
+    const clients = result.rows.map(r => ({ ...r, id: r.client_id, name: `${r.first_name} ${r.last_name}` }))
     res.json({
       message: 'Clients retrieved successfully',
-      count: result.rows.length,
-      clients: result.rows
+      count: clients.length,
+      clients
     })
 
   } catch (error) {
@@ -114,9 +127,10 @@ const getClientById = async (req, res) => {
       return res.status(404).json({ message: 'Client not found' })
     }
 
+    const c = result.rows[0]
     res.json({
       message: 'Client retrieved successfully',
-      client: result.rows[0]
+      client: { ...c, id: c.client_id, name: `${c.first_name} ${c.last_name}` }
     })
 
   } catch (error) {
@@ -192,9 +206,10 @@ const updateClient = async (req, res) => {
       ]
     )
 
+    const updated = result.rows[0]
     res.json({
       message: 'Client updated successfully',
-      client: result.rows[0]
+      client: { ...updated, id: updated.client_id, name: `${updated.first_name} ${updated.last_name}` }
     })
 
   } catch (error) {
@@ -227,9 +242,10 @@ const deactivateClient = async (req, res) => {
       [req.user.userId, 'CLIENT_DEACTIVATED', 'clients', id]
     )
 
+    const c2 = result.rows[0]
     res.json({
       message: 'Client deactivated successfully',
-      client: result.rows[0]
+      client: { ...c2, id: c2.client_id, name: `${c2.first_name} ${c2.last_name}` }
     })
 
   } catch (error) {

@@ -3,13 +3,26 @@ const pool = require('../db')
 // ─── CREATE SCHEDULE (admin only) ────────────────────────────────────────────
 const createSchedule = async (req, res) => {
   try {
-    const {
+    let {
       caregiver_id,
       client_id,
       scheduled_start,
       scheduled_end,
-      notes
+      notes,
+      // support frontend-friendly fields
+      visit_date,
+      start_time,
+      end_time
     } = req.body
+
+    // If frontend supplies date + time pieces, build scheduled_start/ end
+    if (!scheduled_start && visit_date && start_time) {
+      scheduled_start = new Date(`${visit_date}T${start_time}`)
+    }
+    if (!scheduled_end && visit_date && end_time) {
+      // if end_time is earlier than start_time, assume same day
+      scheduled_end = new Date(`${visit_date}T${end_time}`)
+    }
 
     // 1. Validate required fields
     if (!caregiver_id || !client_id || !scheduled_start || !scheduled_end) {
@@ -114,9 +127,18 @@ const createSchedule = async (req, res) => {
       ]
     )
 
+    // map to frontend-friendly shape
+    const sched = {
+      ...newSchedule,
+      id: newSchedule.schedule_id,
+      visit_date: new Date(newSchedule.scheduled_start).toISOString().split('T')[0],
+      start_time: new Date(newSchedule.scheduled_start).toTimeString().split(' ')[0].slice(0,5),
+      end_time: new Date(newSchedule.scheduled_end).toTimeString().split(' ')[0].slice(0,5)
+    }
+
     res.status(201).json({
       message: 'Schedule created successfully',
-      schedule: newSchedule
+      schedule: sched
     })
 
   } catch (error) {
@@ -172,10 +194,20 @@ const getAllSchedules = async (req, res) => {
 
     const result = await pool.query(query, params)
 
+    const schedules = result.rows.map(s => ({
+      ...s,
+      id: s.visit_id || s.schedule_id,
+      schedule_id: s.schedule_id,
+      visit_id: s.visit_id,
+      visit_date: new Date(s.scheduled_start).toISOString().split('T')[0],
+      start_time: new Date(s.scheduled_start).toTimeString().split(' ')[0].slice(0,5),
+      end_time: new Date(s.scheduled_end).toTimeString().split(' ')[0].slice(0,5)
+    }))
+
     res.json({
       message: 'Schedules retrieved successfully',
-      count: result.rows.length,
-      schedules: result.rows
+      count: schedules.length,
+      schedules
     })
 
   } catch (error) {
@@ -220,10 +252,18 @@ const getCaregiverSchedules = async (req, res) => {
       [id]
     )
 
+    const schedules = result.rows.map(s => ({
+      ...s,
+      id: s.schedule_id,
+      visit_date: new Date(s.scheduled_start).toISOString().split('T')[0],
+      start_time: new Date(s.scheduled_start).toTimeString().split(' ')[0].slice(0,5),
+      end_time: new Date(s.scheduled_end).toTimeString().split(' ')[0].slice(0,5)
+    }))
+
     res.json({
       message: 'Caregiver schedules retrieved',
-      count: result.rows.length,
-      schedules: result.rows
+      count: schedules.length,
+      schedules
     })
 
   } catch (error) {
@@ -265,9 +305,80 @@ const updateScheduleStatus = async (req, res) => {
   }
 }
 
+// ─── DELETE SCHEDULE (admin only) ────────────────────────────────────────────
+const deleteSchedule = async (req, res) => {
+  let client
+
+  try {
+    client = await pool.connect()
+    const { id } = req.params
+
+    await client.query('BEGIN')
+
+    const scheduleResult = await client.query(
+      `SELECT schedule_id, caregiver_id, client_id, scheduled_start, scheduled_end, status, notes
+       FROM schedules
+       WHERE schedule_id = $1`,
+      [id]
+    )
+
+    if (scheduleResult.rows.length === 0) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ message: 'Schedule not found' })
+    }
+
+    const schedule = scheduleResult.rows[0]
+
+    await client.query(
+      `DELETE FROM gps_logs
+       WHERE visit_id IN (SELECT visit_id FROM visits WHERE schedule_id = $1)`,
+      [id]
+    )
+
+    await client.query(
+      `DELETE FROM alerts
+       WHERE visit_id IN (SELECT visit_id FROM visits WHERE schedule_id = $1)`,
+      [id]
+    )
+
+    await client.query('DELETE FROM visits WHERE schedule_id = $1', [id])
+
+    await client.query('DELETE FROM schedules WHERE schedule_id = $1', [id])
+
+    await client.query(
+      `INSERT INTO audit_logs (user_id, action, table_name, record_id, old_data)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        req.user.userId,
+        'SCHEDULE_DELETED',
+        'schedules',
+        id,
+        JSON.stringify({
+          ...schedule,
+        })
+      ]
+    )
+
+    await client.query('COMMIT')
+
+    res.json({ message: 'Schedule deleted successfully' })
+  } catch (error) {
+    if (client) {
+      await client.query('ROLLBACK')
+    }
+    console.error('Delete schedule error:', error.message)
+    res.status(500).json({ message: 'Server error', error: error.message })
+  } finally {
+    if (client) {
+      client.release()
+    }
+  }
+}
+
 module.exports = {
   createSchedule,
   getAllSchedules,
   getCaregiverSchedules,
-  updateScheduleStatus
+  updateScheduleStatus,
+  deleteSchedule
 }

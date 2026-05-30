@@ -123,7 +123,9 @@ const login = async (req, res) => {
       token,
       user: {
         user_id: user.user_id,
+        id: user.user_id,
         full_name: user.full_name,
+        name: user.full_name,
         email: user.email,
         role: user.role,
         phone: user.phone
@@ -151,7 +153,8 @@ const getMe = async (req, res) => {
       return res.status(404).json({ message: 'User not found' })
     }
 
-    res.json({ user: result.rows[0] })
+    const u = result.rows[0]
+    res.json({ user: { ...u, id: u.user_id, name: u.full_name } })
 
   } catch (error) {
     console.error('GetMe error:', error.message)
@@ -159,4 +162,112 @@ const getMe = async (req, res) => {
   }
 }
 
-module.exports = { register, login, getMe }
+// ─── UPDATE CAREGIVER (admin only) ──────────────────────────────────────────
+const updateCaregiver = async (req, res) => {
+  try {
+    const { id } = req.params
+    const { full_name, email, phone, password, is_active } = req.body
+
+    const existing = await pool.query(
+      'SELECT * FROM users WHERE user_id = $1 AND role = $2',
+      [id, 'caregiver']
+    )
+
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ message: 'Caregiver not found' })
+    }
+
+    const oldUser = existing.rows[0]
+
+    if (email && email !== oldUser.email) {
+      const duplicate = await pool.query(
+        'SELECT user_id FROM users WHERE email = $1 AND user_id <> $2',
+        [email, id]
+      )
+
+      if (duplicate.rows.length > 0) {
+        return res.status(400).json({ message: 'Email already registered' })
+      }
+    }
+
+    const password_hash = password ? await bcrypt.hash(password, 10) : null
+
+    const result = await pool.query(
+      `UPDATE users SET
+        full_name = COALESCE($1, full_name),
+        email = COALESCE($2, email),
+        phone = COALESCE($3, phone),
+        password_hash = COALESCE($4, password_hash),
+        is_active = COALESCE($5, is_active)
+       WHERE user_id = $6 AND role = 'caregiver'
+       RETURNING user_id, full_name, email, role, phone, is_active, created_at`,
+      [full_name, email, phone, password_hash, is_active, id]
+    )
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Caregiver not found' })
+    }
+
+    await pool.query(
+      `INSERT INTO audit_logs (user_id, action, table_name, record_id, old_data, new_data)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        req.user.userId,
+        'CAREGIVER_UPDATED',
+        'users',
+        id,
+        JSON.stringify(oldUser),
+        JSON.stringify(result.rows[0])
+      ]
+    )
+
+    const updatedUser = result.rows[0]
+    res.json({
+      message: 'Caregiver updated successfully',
+      user: { ...updatedUser, id: updatedUser.user_id, name: updatedUser.full_name }
+    })
+  } catch (error) {
+    console.error('Update caregiver error:', error.message)
+    res.status(500).json({ message: 'Server error', error: error.message })
+  }
+}
+
+// ─── DEACTIVATE CAREGIVER (admin only) ──────────────────────────────────────
+const deactivateCaregiver = async (req, res) => {
+  try {
+    const { id } = req.params
+
+    const existing = await pool.query(
+      'SELECT user_id, full_name, email, phone, role, is_active FROM users WHERE user_id = $1 AND role = $2',
+      [id, 'caregiver']
+    )
+
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ message: 'Caregiver not found' })
+    }
+
+    const result = await pool.query(
+      `UPDATE users SET is_active = false
+       WHERE user_id = $1 AND role = 'caregiver'
+       RETURNING user_id, full_name, email, phone, role, is_active, created_at`,
+      [id]
+    )
+
+    await pool.query(
+      `INSERT INTO audit_logs (user_id, action, table_name, record_id, old_data)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [req.user.userId, 'CAREGIVER_DEACTIVATED', 'users', id, JSON.stringify(existing.rows[0])]
+    )
+
+    const caregiver = result.rows[0]
+    res.json({
+      message: 'Caregiver deleted successfully',
+      user: { ...caregiver, id: caregiver.user_id, name: caregiver.full_name }
+    })
+  } catch (error) {
+    console.error('Deactivate caregiver error:', error.message)
+    res.status(500).json({ message: 'Server error', error: error.message })
+  }
+}
+
+module.exports = { register, login, getMe, updateCaregiver, deactivateCaregiver }

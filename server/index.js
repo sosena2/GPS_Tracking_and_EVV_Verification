@@ -8,6 +8,7 @@ const clientRoutes = require('./routes/clients')
 const scheduleRoutes = require('./routes/schedules')
 const visitRoutes = require('./routes/visits')
 const alertRoutes = require('./routes/alerts')
+const userRoutes = require('./routes/users')
 
 const app = express()
 
@@ -15,11 +16,12 @@ app.use(cors())
 app.use(express.json())
 
 // Routes
-app.use('/auth', authRoutes)
-app.use('/clients', clientRoutes)
-app.use('/schedules', scheduleRoutes)
-app.use('/visits', visitRoutes)
-app.use('/alerts', alertRoutes)
+app.use('/api/auth', authRoutes)
+app.use('/api/clients', clientRoutes)
+app.use('/api/schedules', scheduleRoutes)
+app.use('/api/visits', visitRoutes)
+app.use('/api/alerts', alertRoutes)
+app.use('/api/users', userRoutes)
 
 app.get('/test-db', async (req, res) => {
   try {

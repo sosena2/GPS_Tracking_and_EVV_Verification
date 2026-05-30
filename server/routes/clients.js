@@ -22,5 +22,6 @@ router.get('/:id', verifyToken, getClientById)
 // Admin only — update and deactivate
 router.put('/:id', verifyToken, adminOnly, updateClient)
 router.patch('/:id/deactivate', verifyToken, adminOnly, deactivateClient)
+router.delete('/:id', verifyToken, adminOnly, deactivateClient)
 
 module.exports = router

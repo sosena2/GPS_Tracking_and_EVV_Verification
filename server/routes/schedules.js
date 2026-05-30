@@ -4,7 +4,8 @@ const {
   createSchedule,
   getAllSchedules,
   getCaregiverSchedules,
-  updateScheduleStatus
+  updateScheduleStatus,
+  deleteSchedule
 } = require('../controllers/scheduleController')
 const { verifyToken, adminOnly } = require('../middleware/auth')
 
@@ -12,6 +13,7 @@ const { verifyToken, adminOnly } = require('../middleware/auth')
 router.post('/', verifyToken, adminOnly, createSchedule)
 router.get('/admin', verifyToken, adminOnly, getAllSchedules)
 router.patch('/:id/status', verifyToken, adminOnly, updateScheduleStatus)
+router.delete('/:id', verifyToken, adminOnly, deleteSchedule)
 
 // Both roles — but controller enforces caregiver can only see their own
 router.get('/caregiver/:id', verifyToken, getCaregiverSchedules)

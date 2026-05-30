@@ -168,4 +168,98 @@ const getDailyReport = async (req, res) => {
   }
 }
 
-module.exports = { getAllAlerts, resolveAlert, getDailyReport }
+// ─── VISIT REPORT (frontend expects /reports/visits) ─────────────────────────
+const getVisitReport = async (req, res) => {
+  try {
+    const { from, to } = req.query
+    if (!from || !to) return res.status(400).json({ message: 'Please provide from and to (YYYY-MM-DD)' })
+
+    const result = await pool.query(
+      `SELECT
+        v.visit_id AS id,
+        u.full_name AS caregiver_name,
+        c.first_name || ' ' || c.last_name AS client_name,
+        DATE(v.check_in_time) AS visit_date,
+        v.check_in_time AS checkin_time,
+        v.check_out_time AS checkout_time,
+        ROUND(EXTRACT(EPOCH FROM (v.check_out_time - v.check_in_time))/60)::int AS duration_mins,
+        v.status
+       FROM visits v
+       JOIN users u ON v.caregiver_id = u.user_id
+       JOIN clients c ON v.client_id = c.client_id
+       WHERE v.check_in_time BETWEEN $1 AND $2
+       ORDER BY v.check_in_time DESC`,
+      [from, to + ' 23:59:59']
+    )
+
+    res.json(result.rows)
+  } catch (error) {
+    console.error('getVisitReport error:', error.message)
+    res.status(500).json({ message: 'Server error', error: error.message })
+  }
+}
+
+// ─── FRAUD REPORT (frontend expects /reports/fraud) ────────────────────────
+const getFraudReport = async (req, res) => {
+  try {
+    const { from, to } = req.query
+    if (!from || !to) return res.status(400).json({ message: 'Please provide from and to (YYYY-MM-DD)' })
+
+    const result = await pool.query(
+      `SELECT
+        a.alert_id AS id,
+        u.full_name AS caregiver_name,
+        a.alert_type,
+        a.description AS message,
+        a.created_at
+       FROM alerts a
+       LEFT JOIN visits v ON a.visit_id = v.visit_id
+       LEFT JOIN users u ON v.caregiver_id = u.user_id
+       WHERE a.created_at BETWEEN $1 AND $2
+       ORDER BY a.created_at DESC`,
+      [from, to + ' 23:59:59']
+    )
+
+    res.json(result.rows)
+  } catch (error) {
+    console.error('getFraudReport error:', error.message)
+    res.status(500).json({ message: 'Server error', error: error.message })
+  }
+}
+
+// ─── ATTENDANCE REPORT (frontend expects /reports/attendance) ─────────────
+const getAttendanceReport = async (req, res) => {
+  try {
+    const { from, to } = req.query
+    if (!from || !to) return res.status(400).json({ message: 'Please provide from and to (YYYY-MM-DD)' })
+
+    const result = await pool.query(
+      `SELECT
+        u.full_name AS caregiver_name,
+        COUNT(*) AS total_visits,
+        COUNT(*) FILTER (WHERE v.status = 'completed') AS completed,
+        COUNT(*) FILTER (WHERE v.status = 'missed') AS missed,
+        ROUND(AVG(EXTRACT(EPOCH FROM (v.check_out_time - v.check_in_time))/60)::numeric,1) AS avg_duration
+       FROM visits v
+       JOIN users u ON v.caregiver_id = u.user_id
+       WHERE v.check_in_time BETWEEN $1 AND $2
+       GROUP BY u.user_id, u.full_name
+       ORDER BY total_visits DESC`,
+      [from, to + ' 23:59:59']
+    )
+
+    res.json(result.rows)
+  } catch (error) {
+    console.error('getAttendanceReport error:', error.message)
+    res.status(500).json({ message: 'Server error', error: error.message })
+  }
+}
+
+module.exports = {
+  getAllAlerts,
+  resolveAlert,
+  getDailyReport,
+  getVisitReport,
+  getFraudReport,
+  getAttendanceReport
+}
