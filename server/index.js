@@ -6,6 +6,8 @@ const pool = require('./db')
 const authRoutes = require('./routes/auth')
 const clientRoutes = require('./routes/clients')
 const scheduleRoutes = require('./routes/schedules')
+const visitRoutes = require('./routes/visits')
+const alertRoutes = require('./routes/alerts')
 
 const app = express()
 
@@ -16,6 +18,8 @@ app.use(express.json())
 app.use('/auth', authRoutes)
 app.use('/clients', clientRoutes)
 app.use('/schedules', scheduleRoutes)
+app.use('/visits', visitRoutes)
+app.use('/alerts', alertRoutes)
 
 app.get('/test-db', async (req, res) => {
   try {
