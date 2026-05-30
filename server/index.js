@@ -3,17 +3,16 @@ const cors = require('cors')
 require('dotenv').config()
 
 const pool = require('./db')
+const authRoutes = require('./routes/auth')
 
 const app = express()
 
 app.use(cors())
 app.use(express.json())
 
-app.get('/', (req, res) => {
-  res.json({ message: 'EVV Server is running' })
-})
+// Routes
+app.use('/auth', authRoutes)
 
-// This route will query your actual users table to confirm everything works
 app.get('/test-db', async (req, res) => {
   try {
     const result = await pool.query('SELECT COUNT(*) FROM users')
@@ -22,10 +21,7 @@ app.get('/test-db', async (req, res) => {
       users_count: result.rows[0].count
     })
   } catch (error) {
-    res.status(500).json({
-      message: '❌ Database query failed',
-      error: error.message
-    })
+    res.status(500).json({ message: '❌ Query failed', error: error.message })
   }
 })
 
