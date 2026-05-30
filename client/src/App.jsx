@@ -1,59 +1,57 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider } from './context/AuthContext'
-import ProtectedRoute from './components/ProtectedRoute'
-
+import { Toaster } from 'react-hot-toast'
+import { AuthProvider } from './context/AuthProvider'
+import useTheme from './hooks/useTheme'
+import ProtectedRoute from './components/layout/ProtectedRoute'
+import Landing from './pages/Landing'
 import Login from './pages/Login'
-import AdminDashboard from './pages/admin/Dashboard'
-import AdminClients from './pages/admin/Clients'
-import AdminCaregivers from './pages/admin/Caregivers'
-import AdminSchedules from './pages/admin/Schedules'
-import AdminAlerts from './pages/admin/Alerts'
-import AdminReports from './pages/admin/Reports'
-import CaregiverDashboard from './pages/caregiver/Dashboard'
-import VisitDetail from './pages/shared/VisitDetail'
+import Dashboard from './pages/admin/Dashboard'
+import Clients from './pages/admin/Clients'
+import Caregivers from './pages/admin/Caregivers'
+import Schedules from './pages/admin/Schedules'
+import Alerts from './pages/admin/Alerts'
+import Reports from './pages/admin/Reports'
+import CaregiverDashboard from './pages/caregiver/CaregiverDashboard'
+import VisitDetail from './pages/caregiver/VisitDetail'
 
-import 'leaflet/dist/leaflet.css'
+export default function App() {
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
 
-function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            style: {
+              background: isDark ? '#1f2937' : '#ffffff',
+              color: isDark ? '#f9fafb' : '#111827',
+              border: isDark ? '1px solid #374151' : '1px solid #e5e7eb',
+            },
+          }}
+        />
         <Routes>
+          <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
 
-          <Route path="/admin" element={
-            <ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>
-          } />
-          <Route path="/admin/clients" element={
-            <ProtectedRoute allowedRoles={['admin']}><AdminClients /></ProtectedRoute>
-          } />
-          <Route path="/admin/caregivers" element={
-            <ProtectedRoute allowedRoles={['admin']}><AdminCaregivers /></ProtectedRoute>
-          } />
-          <Route path="/admin/schedules" element={
-            <ProtectedRoute allowedRoles={['admin']}><AdminSchedules /></ProtectedRoute>
-          } />
-          <Route path="/admin/alerts" element={
-            <ProtectedRoute allowedRoles={['admin']}><AdminAlerts /></ProtectedRoute>
-          } />
-          <Route path="/admin/reports" element={
-            <ProtectedRoute allowedRoles={['admin']}><AdminReports /></ProtectedRoute>
-          } />
+          <Route element={<ProtectedRoute role="admin" />}>
+            <Route path="/admin/dashboard" element={<Dashboard />} />
+            <Route path="/admin/clients"   element={<Clients />} />
+            <Route path="/admin/caregivers" element={<Caregivers />} />
+            <Route path="/admin/schedules" element={<Schedules />} />
+            <Route path="/admin/alerts"    element={<Alerts />} />
+            <Route path="/admin/reports"   element={<Reports />} />
+          </Route>
 
-          <Route path="/caregiver" element={
-            <ProtectedRoute allowedRoles={['caregiver']}><CaregiverDashboard /></ProtectedRoute>
-          } />
+          <Route element={<ProtectedRoute role="caregiver" />}>
+            <Route path="/caregiver/dashboard"  element={<CaregiverDashboard />} />
+            <Route path="/caregiver/visit/:id"  element={<VisitDetail />} />
+          </Route>
 
-          <Route path="/visits/:id" element={
-            <ProtectedRoute allowedRoles={['admin', 'caregiver']}><VisitDetail /></ProtectedRoute>
-          } />
-
-          <Route path="/" element={<Navigate to="/login" replace />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
   )
 }
-
-export default App

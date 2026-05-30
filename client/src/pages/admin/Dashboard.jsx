@@ -1,50 +1,61 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
-import { Link } from 'react-router-dom'
+import { Users, CalendarCheck, AlertTriangle, CheckCircle } from 'lucide-react'
+import { getAllVisits, getActiveVisits, getAlerts } from '../../services/api'
+import Card from '../../components/ui/Card'
+import Badge from '../../components/ui/Badge'
+import Spinner from '../../components/ui/Spinner'
 import L from 'leaflet'
-import Layout from '../../components/Layout'
-import api from '../../api/axios'
+import 'leaflet/dist/leaflet.css'
 
 delete L.Icon.Default.prototype._getIconUrl
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconUrl:       'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl:     'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 })
 
-const statusStyles = {
-  pending:        { pill: 'bg-amber-100 text-amber-700',  dot: 'bg-amber-400' },
-  in_progress:    { pill: 'bg-green-100 text-green-700',  dot: 'bg-green-500' },
-  completed:      { pill: 'bg-blue-100 text-blue-700',    dot: 'bg-blue-500'  },
-  missed:         { pill: 'bg-slate-100 text-slate-600',  dot: 'bg-slate-400' },
-  fraud_suspected:{ pill: 'bg-red-100 text-red-700',      dot: 'bg-red-500'   },
+function StatCard({ icon: Icon, label, value, color }) {
+  return (
+    <Card className="flex items-center gap-4">
+      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${color}`}>
+        <Icon size={22} className="text-white" />
+      </div>
+      <div>
+        <p className="text-2xl font-bold text-white">{value ?? 0}</p>
+        <p className="text-sm text-gray-400">{label}</p>
+      </div>
+    </Card>
+  )
 }
 
-const StatCard = ({ label, value, color, icon }) => (
-  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex items-center gap-4">
-    <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl ${color}`}>
-      {icon}
-    </div>
-    <div>
-      <p className="text-2xl font-bold text-slate-800">{value}</p>
-      <p className="text-sm text-slate-500">{label}</p>
-    </div>
-  </div>
-)
-
-const Dashboard = () => {
-  const [visits, setVisits] = useState([])
+export default function Dashboard() {
+  const [allVisits, setAllVisits] = useState([])
+  const [activeVisits, setActiveVisits] = useState([])
   const [alerts, setAlerts] = useState([])
   const [loading, setLoading] = useState(true)
 
+  const toIsoDate = (value) => {
+    if (!value) return null
+    const date = new Date(value)
+    return Number.isNaN(date.getTime()) ? null : date.toISOString().split('T')[0]
+  }
+
+  const asArray = (value) => {
+    if (Array.isArray(value)) return value
+    if (Array.isArray(value?.visits)) return value.visits
+    if (Array.isArray(value?.alerts)) return value.alerts
+    if (Array.isArray(value?.data?.visits)) return value.data.visits
+    if (Array.isArray(value?.data?.alerts)) return value.data.alerts
+    return []
+  }
+
   const fetchData = useCallback(async () => {
     try {
-      const [visitsRes, alertsRes] = await Promise.all([
-        api.get('/visits/all'),
-        api.get('/alerts?is_resolved=false')
-      ])
-      setVisits(visitsRes.data.visits)
-      setAlerts(alertsRes.data.alerts)
+      const [all, active, a] = await Promise.all([getAllVisits(), getActiveVisits(), getAlerts()])
+      setAllVisits(asArray(all.data))
+      setActiveVisits(asArray(active.data))
+      setAlerts(asArray(a.data))
     } catch (err) {
       console.error('Dashboard fetch error:', err)
     } finally {
@@ -52,201 +63,98 @@ const Dashboard = () => {
     }
   }, [])
 
-  // Initial load + poll every 30 seconds
   useEffect(() => {
-    fetchData()
-    const interval = setInterval(fetchData, 30000)
-    return () => clearInterval(interval)
+    const initialLoad = window.setTimeout(() => {
+      void fetchData()
+    }, 0)
+    const interval = window.setInterval(() => {
+      void fetchData()
+    }, 30000)
+
+    return () => {
+      window.clearTimeout(initialLoad)
+      window.clearInterval(interval)
+    }
   }, [fetchData])
 
-  const stats = {
-    active:    visits.filter(v => v.status === 'in_progress').length,
-    pending:   visits.filter(v => v.status === 'pending').length,
-    completed: visits.filter(v => v.status === 'completed').length,
-    flagged:   visits.filter(v => v.status === 'fraud_suspected').length,
-  }
+  const activeVisitList = Array.isArray(activeVisits) ? activeVisits : []
+  const allVisitList    = Array.isArray(allVisits) ? allVisits : []
+  const alertList       = Array.isArray(alerts) ? alerts : []
+  const activeCount     = activeVisitList.filter(v => v.status === 'active' || v.status === 'in_progress').length
+  const todayString     = new Date().toISOString().split('T')[0]
+  const completedCount  = allVisitList.filter((v) => {
+    const completedAt = v.check_out_time || v.check_out_at || v.created_at
+    const completedDate = toIsoDate(completedAt)
+    return v.status === 'completed' && completedDate === todayString
+  }).length
+  const alertCount      = alertList.filter(a => !(a.resolved ?? a.is_resolved)).length
+  const mapCenter       = activeVisitList[0]?.checkin_lat
+    ? [activeVisitList[0].checkin_lat, activeVisitList[0].checkin_lng]
+    : [9.0192, 38.7525]
 
-  // Visits that have GPS and are currently active — show on map
-  const mappableVisits = visits.filter(
-    v => v.status === 'in_progress' &&
-         v.check_in_latitude &&
-         v.check_in_longitude
+  if (loading) return (
+    <div className="flex items-center justify-center h-64"><Spinner size="lg" /></div>
   )
-
-  if (loading) {
-    return (
-      <Layout title="Dashboard">
-        <div className="flex items-center justify-center h-64 text-slate-400">
-          Loading dashboard...
-        </div>
-      </Layout>
-    )
-  }
 
   return (
-    <Layout title="Dashboard">
-
-      {/* Stat Cards */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <StatCard label="Active Visits"    value={stats.active}    icon="🟢" color="bg-green-50"  />
-        <StatCard label="Pending"          value={stats.pending}   icon="🕐" color="bg-amber-50"  />
-        <StatCard label="Completed Today"  value={stats.completed} icon="✅" color="bg-blue-50"   />
-        <StatCard label="Flagged"          value={stats.flagged}   icon="🚨" color="bg-red-50"    />
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-white">Live Dashboard</h1>
+        <p className="text-gray-400 text-sm mt-1">Real-time monitoring of all field activities</p>
       </div>
 
-      <div className="grid grid-cols-3 gap-6 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard icon={Users}         label="Active Visits"   value={activeCount}    color="bg-blue-600" />
+        <StatCard icon={CheckCircle}   label="Completed Today" value={completedCount} color="bg-emerald-600" />
+        <StatCard icon={AlertTriangle} label="Open Alerts"     value={alertCount}     color="bg-red-600" />
+        <StatCard icon={CalendarCheck} label="Total Visits"    value={allVisitList.length}  color="bg-primary-600" />
+      </div>
 
-        {/* Live Map */}
-        <div className="col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-slate-800">Live Caregiver Locations</h3>
-            <span className="flex items-center gap-1.5 text-xs text-green-600 font-medium">
-              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-              Live
-            </span>
-          </div>
-          <div className="h-80 rounded-lg overflow-hidden">
-            <MapContainer
-              center={[9.0192, 38.7525]}
-              zoom={12}
-              style={{ height: '100%', width: '100%' }}
-            >
-              <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution="© OpenStreetMap contributors"
-              />
-              {mappableVisits.map(v => (
-                <Marker
-                  key={v.visit_id}
-                  position={[
-                    parseFloat(v.check_in_latitude),
-                    parseFloat(v.check_in_longitude)
-                  ]}
-                >
+      <Card className="p-0 overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-800">
+          <h2 className="font-semibold text-white">GPS Activity Map</h2>
+          <p className="text-xs text-gray-400 mt-0.5">Live caregiver locations</p>
+        </div>
+        <div style={{ height: '400px' }}>
+          <MapContainer center={mapCenter} zoom={12} style={{ height: '100%', width: '100%' }}>
+            <TileLayer
+              attribution='&copy; OpenStreetMap'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            {activeVisitList.map((v, index) =>
+              v.checkin_lat && (
+                <Marker key={v.id || `${v.caregiver_name || 'visit'}-${index}`} position={[v.checkin_lat, v.checkin_lng]}>
                   <Popup>
-                    <div className="text-sm">
-                      <p className="font-semibold">{v.caregiver_name}</p>
-                      <p className="text-slate-500">Client: {v.client_name}</p>
-                      <p className="text-slate-500">
-                        Since: {new Date(v.check_in_time).toLocaleTimeString()}
-                      </p>
-                      <Link
-                        to={`/visits/${v.visit_id}`}
-                        className="text-indigo-600 font-medium"
-                      >
-                        View details →
-                      </Link>
-                    </div>
+                    <strong>{v.caregiver_name}</strong><br />
+                    Client: {v.client_name}<br />
+                    Status: {v.status}
                   </Popup>
                 </Marker>
-              ))}
-            </MapContainer>
-          </div>
-          {mappableVisits.length === 0 && (
-            <p className="text-center text-slate-400 text-sm mt-3">
-              No active visits with GPS data right now.
-            </p>
-          )}
-        </div>
-
-        {/* Unresolved Alerts Panel */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-slate-800">Recent Alerts</h3>
-            <Link
-              to="/admin/alerts"
-              className="text-xs text-indigo-600 font-medium hover:underline"
-            >
-              View all
-            </Link>
-          </div>
-
-          {alerts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-40 text-slate-400 text-sm">
-              <span className="text-3xl mb-2">✅</span>
-              No unresolved alerts
-            </div>
-          ) : (
-            <div className="space-y-3 overflow-y-auto max-h-80">
-              {alerts.slice(0, 8).map(alert => (
-                <div
-                  key={alert.alert_id}
-                  className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg"
-                >
-                  <span className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${
-                    alert.severity === 'critical' ? 'bg-red-500' :
-                    alert.severity === 'high'     ? 'bg-orange-500' :
-                    'bg-amber-400'
-                  }`} />
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium text-slate-700 capitalize">
-                      {alert.alert_type.replace(/_/g, ' ')}
-                    </p>
-                    <p className="text-xs text-slate-500 truncate mt-0.5">
-                      {alert.description}
-                    </p>
-                    <p className="text-xs text-slate-400 mt-1">
-                      {new Date(alert.created_at).toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Recent Visits Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-          <h3 className="font-semibold text-slate-800">Recent Visits</h3>
-          <span className="text-xs text-slate-400">Showing latest 10</span>
-        </div>
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 border-b border-slate-200">
-            <tr>
-              {['Caregiver', 'Client', 'Check In', 'Check Out', 'Status', ''].map(h => (
-                <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {visits.slice(0, 10).map(v => {
-              const s = statusStyles[v.status] || statusStyles.pending
-              return (
-                <tr key={v.visit_id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-5 py-4 font-medium text-slate-800">{v.caregiver_name}</td>
-                  <td className="px-5 py-4 text-slate-600">{v.client_name}</td>
-                  <td className="px-5 py-4 text-slate-600">
-                    {v.check_in_time ? new Date(v.check_in_time).toLocaleString() : '—'}
-                  </td>
-                  <td className="px-5 py-4 text-slate-600">
-                    {v.check_out_time ? new Date(v.check_out_time).toLocaleString() : '—'}
-                  </td>
-                  <td className="px-5 py-4">
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${s.pill}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
-                      {v.status.replace(/_/g, ' ')}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4">
-                    <Link
-                      to={`/visits/${v.visit_id}`}
-                      className="text-indigo-600 hover:underline text-xs font-medium"
-                    >
-                      View →
-                    </Link>
-                  </td>
-                </tr>
               )
-            })}
-          </tbody>
-        </table>
-      </div>
-    </Layout>
+            )}
+          </MapContainer>
+        </div>
+      </Card>
+
+      <Card>
+        <h2 className="font-semibold text-white mb-4">Recent Alerts</h2>
+        {alerts.length === 0 ? (
+          <p className="text-gray-500 text-sm">No alerts at this time.</p>
+        ) : (
+          <div className="space-y-3">
+            {alerts.slice(0, 5).map((alert) => (
+              <div key={alert.id} className="flex items-start gap-3 p-3 rounded-lg bg-gray-800">
+                <AlertTriangle size={16} className="text-yellow-400 mt-0.5 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm text-white">{alert.message}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{alert.caregiver_name} · {alert.created_at}</p>
+                </div>
+                <Badge status={alert.type || alert.alert_type} />
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+    </div>
   )
 }
-
-export default Dashboard

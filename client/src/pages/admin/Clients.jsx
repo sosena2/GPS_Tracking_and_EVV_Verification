@@ -1,209 +1,204 @@
-import { useState, useEffect } from 'react'
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet'
-import L from 'leaflet'
-import Layout from '../../components/Layout'
-import api from '../../api/axios'
+import { useEffect, useState, useCallback } from 'react'
+import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { getClients, createClient, updateClient, deleteClient } from '../../services/api'
+import Card from '../../components/ui/Card'
+import Button from '../../components/ui/Button'
+import Modal from '../../components/ui/Modal'
+import Table from '../../components/ui/Table'
+import toast from 'react-hot-toast'
 
-delete L.Icon.Default.prototype._getIconUrl
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-})
+const empty = { name: '', address: '', phone: '', latitude: '', longitude: '' }
 
-const LocationPicker = ({ onPick }) => {
-  useMapEvents({ click: e => onPick(e.latlng.lat, e.latlng.lng) })
-  return null
-}
-
-const emptyForm = {
-  first_name: '', last_name: '', address: '',
-  latitude: '', longitude: '', phone: '',
-  emergency_contact: '', emergency_phone: ''
-}
-
-const Clients = () => {
+export default function Clients() {
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState(emptyForm)
-  const [marker, setMarker] = useState(null)
-  const [saving, setSaving] = useState(false)
-  const [toast, setToast] = useState(null)
+  const [modal,   setModal]   = useState(false)
+  const [editing, setEditing] = useState(null)
+  const [form,    setForm]    = useState(empty)
+  const [saving,  setSaving]  = useState(false)
 
-  useEffect(() => { fetchClients() }, [])
+  const asArray = (value) => {
+    if (Array.isArray(value)) return value
+    if (Array.isArray(value?.clients)) return value.clients
+    if (Array.isArray(value?.data?.clients)) return value.data.clients
+    return []
+  }
 
-  const fetchClients = async () => {
-    try {
-      const res = await api.get('/clients')
-      setClients(res.data.clients)
-    } finally {
-      setLoading(false)
+  const normalizeClient = (client) => {
+    if (!client) return null
+
+    const fullName = client.name || [client.first_name, client.last_name].filter(Boolean).join(' ').trim()
+
+    return {
+      ...client,
+      id: client.id ?? client.client_id,
+      name: fullName,
     }
   }
 
-  const showToast = (msg, type = 'success') => {
-    setToast({ msg, type })
-    setTimeout(() => setToast(null), 3000)
+  const buildPayload = (values) => {
+    const parts = values.name.trim().split(/\s+/).filter(Boolean)
+    const first_name = parts.shift() || ''
+    const last_name = parts.join(' ')
+
+    return {
+      first_name,
+      last_name,
+      address: values.address,
+      phone: values.phone,
+      latitude: values.latitude,
+      longitude: values.longitude,
+    }
   }
 
-  const handleMapPick = (lat, lng) => {
-    setMarker([lat, lng])
-    setForm(f => ({ ...f, latitude: lat.toFixed(8), longitude: lng.toFixed(8) }))
+  const load = useCallback(async () => {
+    try {
+      const { data } = await getClients()
+      setClients(asArray(data).map(normalizeClient))
+    } catch (err) {
+      console.error('Failed to load clients:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+
+    const fetchClients = async () => {
+      try {
+        const { data } = await getClients()
+        if (active) {
+          setClients(asArray(data).map(normalizeClient))
+        }
+      } catch (err) {
+        console.error('Failed to load clients:', err)
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+
+    fetchClients()
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const openCreate = () => { setEditing(null); setForm(empty); setModal(true) }
+  const openEdit   = (c) => {
+    const normalized = normalizeClient(c)
+    setEditing(normalized)
+    setForm({
+      name: normalized.name,
+      address: normalized.address,
+      phone: normalized.phone,
+      latitude: normalized.latitude,
+      longitude: normalized.longitude,
+    })
+    setModal(true)
   }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
+  const handleSave = async () => {
     setSaving(true)
     try {
-      await api.post('/clients', form)
-      showToast('Client created successfully')
-      setShowForm(false)
-      setForm(emptyForm)
-      setMarker(null)
-      fetchClients()
+      const payload = buildPayload(form)
+
+      if (editing) {
+        const { data } = await updateClient(editing.id, payload)
+        const saved = normalizeClient(data?.client)
+        if (saved) {
+          setClients((current) => current.map((client) => (client.id === saved.id ? saved : client)))
+        }
+        toast.success('Client updated')
+      } else {
+        const { data } = await createClient(payload)
+        const saved = normalizeClient(data?.client)
+        if (saved) {
+          setClients((current) => [saved, ...current])
+        }
+        toast.success('Client created')
+      }
+      setModal(false)
+      await load()
     } catch (err) {
-      showToast(err.response?.data?.message || 'Failed to create client', 'error')
+      toast.error(err.response?.data?.message || 'Error saving client')
     } finally {
       setSaving(false)
     }
   }
 
+  const handleDelete = async (id) => {
+    if (!confirm('Delete this client?')) return
+    try {
+      await deleteClient(id)
+      toast.success('Client deleted')
+      load()
+    } catch (err) {
+      console.error('Delete error:', err)
+      toast.error('Failed to delete')
+    }
+  }
+
+  const columns = [
+    { key: 'name',      label: 'Name' },
+    { key: 'address',   label: 'Address' },
+    { key: 'phone',     label: 'Phone' },
+    { key: 'latitude',  label: 'Lat' },
+    { key: 'longitude', label: 'Lng' },
+    {
+      key: 'actions', label: 'Actions',
+      render: (row) => (
+        <div className="flex items-center gap-2">
+          <button onClick={() => openEdit(row)} className="text-gray-400 hover:text-white transition-colors"><Pencil size={15} /></button>
+          <button onClick={() => handleDelete(row.id)} className="text-red-400 hover:text-red-300 transition-colors"><Trash2 size={15} /></button>
+        </div>
+      )
+    }
+  ]
+
   return (
-    <Layout title="Clients">
-
-      {/* Toast */}
-      {toast && (
-        <div className={`fixed top-4 right-4 z-50 px-5 py-3 rounded-lg text-sm font-medium shadow-lg ${
-          toast.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
-        }`}>
-          {toast.msg}
-        </div>
-      )}
-
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">Clients</h2>
-          <p className="text-slate-500 text-sm">{clients.length} registered clients</p>
+          <h1 className="text-2xl font-bold text-white">Clients</h1>
+          <p className="text-gray-400 text-sm mt-1">Manage client profiles and GPS locations</p>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-        >
-          {showForm ? 'Cancel' : '+ Add Client'}
-        </button>
+        <Button onClick={openCreate}><Plus size={16} /> Add Client</Button>
       </div>
 
-      {/* Form */}
-      {showForm && (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
-          <h3 className="text-base font-semibold text-slate-800 mb-5">New Client</h3>
-          <form onSubmit={handleSubmit} className="space-y-4">
+      <Card className="p-0">
+        <Table columns={columns} data={clients} loading={loading} />
+      </Card>
 
-            <div className="grid grid-cols-2 gap-4">
-              <Input label="First Name" value={form.first_name} onChange={v => setForm({ ...form, first_name: v })} required />
-              <Input label="Last Name" value={form.last_name} onChange={v => setForm({ ...form, last_name: v })} required />
-              <Input label="Phone" value={form.phone} onChange={v => setForm({ ...form, phone: v })} />
-              <Input label="Emergency Contact" value={form.emergency_contact} onChange={v => setForm({ ...form, emergency_contact: v })} />
-              <Input label="Emergency Phone" value={form.emergency_phone} onChange={v => setForm({ ...form, emergency_phone: v })} />
+      <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Edit Client' : 'New Client'}>
+        <div className="space-y-4">
+          {[
+            { label: 'Full Name',  key: 'name',      type: 'text',   placeholder: 'John Doe' },
+            { label: 'Address',    key: 'address',   type: 'text',   placeholder: '123 Main St' },
+            { label: 'Phone',      key: 'phone',     type: 'text',   placeholder: '+1 234 567 8900' },
+            { label: 'Latitude',   key: 'latitude',  type: 'number', placeholder: '9.0192' },
+            { label: 'Longitude',  key: 'longitude', type: 'number', placeholder: '38.7525' },
+          ].map(({ label, key, type, placeholder }) => (
+            <div key={key}>
+              <label className="block text-sm font-medium text-gray-400 mb-1.5">{label}</label>
+              <input
+                type={type}
+                value={form[key]}
+                onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                placeholder={placeholder}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition"
+              />
             </div>
-
-            <Input label="Address" value={form.address} onChange={v => setForm({ ...form, address: v })} required />
-
-            <div>
-              <p className="text-sm font-medium text-slate-700 mb-2">
-                📍 Click the map to set client location
-              </p>
-              <div className="h-64 rounded-lg overflow-hidden border border-slate-200">
-                <MapContainer center={[9.0192, 38.7525]} zoom={13} style={{ height: '100%', width: '100%' }}>
-                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                  <LocationPicker onPick={handleMapPick} />
-                  {marker && <Marker position={marker} />}
-                </MapContainer>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <Input label="Latitude" value={form.latitude} onChange={v => setForm({ ...form, latitude: v })} required />
-              <Input label="Longitude" value={form.longitude} onChange={v => setForm({ ...form, longitude: v })} required />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800">
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-medium px-6 py-2 rounded-lg transition-colors"
-              >
-                {saving ? 'Saving...' : 'Save Client'}
-              </button>
-            </div>
-          </form>
+          ))}
+          <div className="flex gap-3 pt-2">
+            <Button variant="outline" className="flex-1" onClick={() => setModal(false)}>Cancel</Button>
+            <Button className="flex-1" loading={saving} onClick={handleSave}>
+              {editing ? 'Save Changes' : 'Create Client'}
+            </Button>
+          </div>
         </div>
-      )}
-
-      {/* Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center py-16 text-slate-400">Loading...</div>
-        ) : clients.length === 0 ? (
-          <div className="flex items-center justify-center py-16 text-slate-400">No clients yet. Add your first client.</div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                {['Name', 'Address', 'Phone', 'GPS Coordinates', 'Status'].map(h => (
-                  <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {clients.map(c => (
-                <tr key={c.client_id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-5 py-4 font-medium text-slate-800">
-                    {c.first_name} {c.last_name}
-                  </td>
-                  <td className="px-5 py-4 text-slate-600">{c.address}</td>
-                  <td className="px-5 py-4 text-slate-600">{c.phone || '—'}</td>
-                  <td className="px-5 py-4 font-mono text-xs text-slate-500">
-                    {parseFloat(c.latitude).toFixed(4)}, {parseFloat(c.longitude).toFixed(4)}
-                  </td>
-                  <td className="px-5 py-4">
-                    <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
-                      c.is_active
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-red-100 text-red-700'
-                    }`}>
-                      {c.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </Layout>
+      </Modal>
+    </div>
   )
 }
-
-const Input = ({ label, value, onChange, required }) => (
-  <div>
-    <label className="block text-sm font-medium text-slate-700 mb-1">
-      {label} {required && <span className="text-red-500">*</span>}
-    </label>
-    <input
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      required={required}
-      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-    />
-  </div>
-)
-
-export default Clients
