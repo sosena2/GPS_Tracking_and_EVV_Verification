@@ -5,6 +5,7 @@ require('dotenv').config()
 const pool = require('./db')
 const authRoutes = require('./routes/auth')
 const clientRoutes = require('./routes/clients')
+const scheduleRoutes = require('./routes/schedules')
 
 const app = express()
 
@@ -14,6 +15,7 @@ app.use(express.json())
 // Routes
 app.use('/auth', authRoutes)
 app.use('/clients', clientRoutes)
+app.use('/schedules', scheduleRoutes)
 
 app.get('/test-db', async (req, res) => {
   try {
