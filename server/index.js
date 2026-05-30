@@ -4,6 +4,7 @@ require('dotenv').config()
 
 const pool = require('./db')
 const authRoutes = require('./routes/auth')
+const clientRoutes = require('./routes/clients')
 
 const app = express()
 
@@ -12,16 +13,14 @@ app.use(express.json())
 
 // Routes
 app.use('/auth', authRoutes)
+app.use('/clients', clientRoutes)
 
 app.get('/test-db', async (req, res) => {
   try {
     const result = await pool.query('SELECT COUNT(*) FROM users')
-    res.json({
-      message: '✅ Database connected successfully',
-      users_count: result.rows[0].count
-    })
+    res.json({ message: '✅ Connected', users_count: result.rows[0].count })
   } catch (error) {
-    res.status(500).json({ message: '❌ Query failed', error: error.message })
+    res.status(500).json({ message: '❌ Failed', error: error.message })
   }
 })
 
