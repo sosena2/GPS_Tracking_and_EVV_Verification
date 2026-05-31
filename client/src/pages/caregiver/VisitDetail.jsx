@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { MapPin, Clock, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
 import { getVisit, checkIn, checkOut } from '../../services/api'
+import { io } from 'socket.io-client'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
@@ -16,6 +17,8 @@ export default function VisitDetail() {
   const [working,   setWorking]   = useState(false)
   const [gpsStatus, setGpsStatus] = useState(null)
   const [coords,    setCoords]    = useState(null)
+  const socketRef = useRef(null)
+  const watchRef = useRef(null)
 
   const normalizeVisit = (value) => {
     if (!value) return null
@@ -71,6 +74,60 @@ export default function VisitDetail() {
       cancelled = true
     }
   }, [id])
+
+  // Real-time GPS: start socket + watch when visit becomes active
+  useEffect(() => {
+    // only run for active visits
+    if (!visit || visit.status !== 'active') return
+
+    const rawBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+    const socketBase = rawBase.replace(/\/api\/?$/, '')
+    const token = localStorage.getItem('token')
+
+    const socket = io(socketBase, { auth: { token } })
+    socketRef.current = socket
+
+    socket.on('connect_error', (err) => {
+      console.error('Socket connect error', err)
+    })
+
+    // join the visit room so server can broadcast updates
+    socket.emit('join', { visitId: id })
+
+    // start geolocation watch
+    if (navigator.geolocation) {
+      const watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          const payload = {
+            visit_id: id,
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+            device_info: navigator.userAgent
+          }
+          setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy })
+          socket.emit('gps:update', payload)
+        },
+        (err) => {
+          console.error('Geolocation watch error', err)
+        },
+        { enableHighAccuracy: true, maximumAge: 0 }
+      )
+      watchRef.current = watchId
+    }
+
+    return () => {
+      // cleanup
+      if (watchRef.current != null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(watchRef.current)
+        watchRef.current = null
+      }
+      if (socketRef.current) {
+        socketRef.current.disconnect()
+        socketRef.current = null
+      }
+    }
+  }, [visit, id])
 
   const getGPS = () => new Promise((resolve, reject) => {
     setGpsStatus('fetching')
