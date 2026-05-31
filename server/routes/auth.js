@@ -12,3 +12,4 @@ router.post('/login', login)
 router.get('/me', verifyToken, getMe)
 
 module.exports = router
+
