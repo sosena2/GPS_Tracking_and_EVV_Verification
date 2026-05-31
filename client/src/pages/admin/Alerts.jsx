@@ -29,7 +29,15 @@ export default function Alerts() {
     }
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    const initialLoad = window.setTimeout(() => {
+      void load()
+    }, 0)
+
+    return () => {
+      window.clearTimeout(initialLoad)
+    }
+  }, [load])
 
   const handleResolve = async (id) => {
     try {
@@ -64,7 +72,7 @@ export default function Alerts() {
         ) : (
           <div className="space-y-3">
             {unresolved.map((alert) => (
-              <div key={alert.id} className="flex items-start gap-4 p-4 rounded-xl bg-gray-800 border border-gray-700">
+              <div key={alert.id} className="flex flex-col gap-4 rounded-xl border border-gray-700 bg-gray-800 p-4 sm:flex-row sm:items-start">
                 <AlertTriangle size={18} className="text-yellow-400 mt-0.5 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
@@ -74,7 +82,7 @@ export default function Alerts() {
                   <p className="text-sm text-white">{alert.message}</p>
                   <p className="text-xs text-gray-400 mt-1">Caregiver: {alert.caregiver_name}</p>
                 </div>
-                <Button variant="outline" onClick={() => handleResolve(alert.id)} className="text-xs shrink-0">
+                <Button variant="outline" onClick={() => handleResolve(alert.id)} className="text-xs shrink-0 sm:self-center">
                   Resolve
                 </Button>
               </div>
@@ -88,7 +96,7 @@ export default function Alerts() {
           <h2 className="font-semibold text-white mb-4">Resolved Alerts</h2>
           <div className="space-y-3">
             {resolved.map((alert) => (
-              <div key={alert.id} className="flex items-start gap-4 p-4 rounded-xl bg-gray-800/50 opacity-60">
+              <div key={alert.id} className="flex flex-col gap-4 rounded-xl bg-gray-800/50 p-4 opacity-60 sm:flex-row sm:items-start">
                 <CheckCircle size={18} className="text-emerald-400 mt-0.5 shrink-0" />
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">

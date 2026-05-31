@@ -126,7 +126,7 @@ export default function VisitDetail() {
   const isCompleted = visit.status === 'completed'
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="mx-auto max-w-2xl space-y-6">
       <div className="flex items-center gap-3">
         <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-white transition-colors text-sm">
           ← Back
@@ -134,7 +134,7 @@ export default function VisitDetail() {
       </div>
 
       <Card>
-        <div className="flex items-start justify-between mb-4">
+        <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-start sm:justify-between">
           <h1 className="text-xl font-bold text-white">Visit Details</h1>
           <Badge status={visit.status || 'pending'} />
         </div>
@@ -198,14 +198,14 @@ export default function VisitDetail() {
       )}
 
       {!isCompleted && (
-        <div className="flex gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row">
           {isPending && (
-            <Button className="flex-1 py-3 text-base" loading={working} onClick={handleCheckIn}>
+            <Button className="w-full flex-1 py-3 text-base" loading={working} onClick={handleCheckIn}>
               <MapPin size={18} /> Check In
             </Button>
           )}
           {isActive && (
-            <Button variant="success" className="flex-1 py-3 text-base" loading={working} onClick={handleCheckOut}>
+            <Button variant="success" className="w-full flex-1 py-3 text-base" loading={working} onClick={handleCheckOut}>
               <CheckCircle size={18} /> Check Out
             </Button>
           )}

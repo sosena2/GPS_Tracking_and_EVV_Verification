@@ -18,7 +18,7 @@ const caregiverLinks = [
   { to: '/caregiver/dashboard', icon: LayoutDashboard, label: 'My Visits' },
 ]
 
-export default function Sidebar({ role }) {
+export default function Sidebar({ role, mobileOpen = false, onClose }) {
   const { logout } = useAuth()
   const navigate = useNavigate()
   const links = role === 'admin' ? adminLinks : caregiverLinks
@@ -28,9 +28,13 @@ export default function Sidebar({ role }) {
     navigate('/login', { replace: true })
   }
 
+  const handleNavigate = () => {
+    if (onClose) onClose()
+  }
+
   return (
-    <aside className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
-      <div className="px-6 py-5 border-b border-gray-800">
+    <aside className={`fixed inset-y-0 left-0 z-40 flex w-72 -translate-x-full flex-col border-r border-gray-800 bg-gray-900 transition-transform duration-200 md:static md:z-auto md:w-64 md:translate-x-0 ${mobileOpen ? 'translate-x-0' : ''}`}>
+      <div className="border-b border-gray-800 px-5 py-5 sm:px-6">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-primary-600 flex items-center justify-center">
             <MapPin size={18} className="text-white" />
@@ -42,11 +46,12 @@ export default function Sidebar({ role }) {
         </div>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
         {links.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
             to={to}
+            onClick={handleNavigate}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
                ${isActive

@@ -60,7 +60,7 @@ export default function CaregiverDashboard() {
         <p className="text-gray-400 text-sm mt-1">Here are your assigned visits</p>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {[
           { icon: CalendarDays, label: "Today's Visits", value: today.length,     color: 'bg-blue-600' },
           { icon: Clock,        label: 'Upcoming',       value: upcoming.length,  color: 'bg-emerald-600' },
@@ -85,7 +85,7 @@ export default function CaregiverDashboard() {
         ) : (
           <div className="space-y-3">
             {today.map((visit) => (
-              <div key={visit.id} className="flex items-center justify-between p-4 rounded-xl bg-gray-800 border border-gray-700">
+              <div key={visit.id} className="flex flex-col gap-4 rounded-xl border border-gray-700 bg-gray-800 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 rounded-lg bg-primary-600/20 flex items-center justify-center shrink-0">
                     <MapPin size={18} className="text-primary-400" />
@@ -96,11 +96,12 @@ export default function CaregiverDashboard() {
                     <p className="text-xs text-gray-400">{visit.start_time} — {visit.end_time}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                   <Badge status={getDisplayStatus(visit) || 'pending'} />
                   <Button
                     variant={getDisplayStatus(visit) === 'completed' ? 'ghost' : 'primary'}
                     disabled={getDisplayStatus(visit) === 'completed'}
+                    className="w-full sm:w-auto"
                     onClick={() => navigate(`/caregiver/visit/${visit.id}`)}
                   >
                     {getDisplayStatus(visit) === 'active' ? 'Check Out' : getDisplayStatus(visit) === 'completed' ? 'Done' : 'Check In'}
@@ -117,7 +118,7 @@ export default function CaregiverDashboard() {
           <h2 className="font-semibold text-white mb-4">Upcoming Visits</h2>
           <div className="space-y-3">
             {upcoming.slice(0, 5).map((visit) => (
-              <div key={visit.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-800">
+              <div key={visit.id} className="flex flex-col gap-2 rounded-lg bg-gray-800 p-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm font-medium text-white">{visit.client_name}</p>
                   <p className="text-xs text-gray-400">{visit.visit_date} · {visit.start_time} — {visit.end_time}</p>

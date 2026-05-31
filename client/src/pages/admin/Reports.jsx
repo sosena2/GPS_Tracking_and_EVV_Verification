@@ -90,7 +90,7 @@ export default function Reports() {
       </div>
 
       <Card>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-1.5">Report Type</label>
             <select
@@ -129,12 +129,12 @@ export default function Reports() {
 
       {generated && (
         <Card className="p-0">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+          <div className="flex flex-col gap-4 border-b border-gray-800 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="font-semibold text-white capitalize">{type} Report</h2>
               <p className="text-xs text-gray-400">{dateFrom} — {dateTo} · {data.length} records</p>
             </div>
-            <Button variant="outline" onClick={handleExport}>
+            <Button variant="outline" onClick={handleExport} className="w-full sm:w-auto">
               <Download size={15} /> Export CSV
             </Button>
           </div>

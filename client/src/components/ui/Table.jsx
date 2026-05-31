@@ -1,12 +1,32 @@
 export default function Table({ columns, data, loading }) {
   if (loading) return (
-    <div className="flex items-center justify-center py-16 text-gray-500 text-sm">Loading...</div>
+    <div className="flex items-center justify-center py-16 text-sm text-gray-500">Loading...</div>
   )
   if (!data?.length) return (
-    <div className="flex items-center justify-center py-16 text-gray-500 text-sm">No records found.</div>
+    <div className="flex items-center justify-center py-16 text-sm text-gray-500">No records found.</div>
   )
   return (
-    <div className="overflow-x-auto">
+    <div className="w-full">
+      <div className="space-y-3 md:hidden">
+        {data.map((row, index) => (
+          <div key={row.id ?? index} className="rounded-xl border border-gray-800 bg-gray-900/70 p-4">
+            <div className="space-y-3">
+              {columns.map((col) => (
+                <div key={col.key} className="flex items-start justify-between gap-4">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    {col.label}
+                  </div>
+                  <div className="text-sm text-right text-gray-300">
+                    {col.render ? col.render(row) : row[col.key] ?? '—'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="hidden overflow-x-auto md:block">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-gray-800">
@@ -29,6 +49,7 @@ export default function Table({ columns, data, loading }) {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }

@@ -95,12 +95,12 @@ export default function Schedules() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Schedules</h1>
           <p className="text-gray-400 text-sm mt-1">Assign caregivers to client visits</p>
         </div>
-        <Button onClick={() => setModal(true)}><Plus size={16} /> New Schedule</Button>
+        <Button onClick={() => setModal(true)} className="w-full sm:w-auto"><Plus size={16} /> New Schedule</Button>
       </div>
 
       <Card className="p-0">

@@ -103,7 +103,7 @@ export default function Dashboard() {
         <p className="text-gray-400 text-sm mt-1">Real-time monitoring of all field activities</p>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard icon={Users}         label="Active Visits"   value={activeCount}    color="bg-blue-600" />
         <StatCard icon={CheckCircle}   label="Completed Today" value={completedCount} color="bg-emerald-600" />
         <StatCard icon={AlertTriangle} label="Open Alerts"     value={alertCount}     color="bg-red-600" />

@@ -159,12 +159,12 @@ export default function Clients() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Clients</h1>
           <p className="text-gray-400 text-sm mt-1">Manage client profiles and GPS locations</p>
         </div>
-        <Button onClick={openCreate}><Plus size={16} /> Add Client</Button>
+        <Button onClick={openCreate} className="w-full sm:w-auto"><Plus size={16} /> Add Client</Button>
       </div>
 
       <Card className="p-0">
